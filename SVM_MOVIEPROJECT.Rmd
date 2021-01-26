@@ -1,0 +1,136 @@
+---
+title: "SVM_MOVIEPROJECT"
+author: "Whitney Chu"
+date: "04/11/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Import libraries
+```{r}
+library(forecast)
+library(tidyverse)    
+library(e1071)  
+library(RColorBrewer)
+library(dplyr)
+library(caTools)
+library(datasets)
+library(neuralnet)
+library(caret)
+library(reshape2)
+library(ggplot2)
+library(stringr)
+library(nnet)
+library(DMwR)
+library(mltools)
+library(rmarkdown)
+library(rpart)
+library(rpart.plot)
+library(ggcorrplot)
+library(randomForest)
+library(DMwR)
+library(nnet)
+```
+
+#Read and Import Data
+```{r}
+movie.data <- read.csv("IMDb_movies.csv")
+movie.data
+```
+
+#Preview the Dataset
+```{r}
+set.seed(100)
+movie.data <- movie.data[sample(nrow(movie.data), 2500),]
+movie.data <- movie.data[,c(3:4,6:8,12,14)]
+movie.data
+head(movie.data)
+summary(movie.data)
+dim(movie.data)
+str(movie.data)
+```
+
+#check for missing data
+```{r}
+colSums(is.na(movie.data))
+```
+
+# Adding binary, dependent variable for svm analysis
+```{r}
+movie.data$FavourableMovie <- ifelse(movie.data$avg_vote>=6.4,1,0)
+str(movie.data)
+View(movie.data)
+```
+
+#convert categorical variables
+```{r}
+movie.data$year <- as.numeric(as.factor(movie.data$year))
+movie.data$duration <- as.numeric(as.factor(movie.data$duration))
+movie.data$genre1 <- as.numeric(as.factor(movie.data$genre1))
+movie.data$genre2 <- as.numeric(as.factor(movie.data$genre2))
+movie.data$genre3 <- as.numeric(as.factor(movie.data$genre3))
+movie.data$country1 <- as.numeric(as.factor(movie.data$country1))
+movie.data
+```
+
+#Correlation matrix
+```{r}
+movie.rating <- (movie.data)
+corr <- cor(movie.rating)
+ggcorrplot(corr)
+corr <- as.table(corr)
+```
+
+#split into training and testing set 
+```{r}
+nrow(movie.data)
+rows <- c(1:nrow(movie.data))
+split <- sample(rows,size = (nrow(movie.data)*0.80))
+train <- movie.data[split,]
+test <- (movie.data[-split,])
+
+nrow(train)
+head(train)
+str(train)
+nrow(test)
+head(test)
+```
+
+#create SVM model 
+```{r}
+Moviesvm = svm(formula = FavourableMovie ~ year + duration + genre1 + genre2 + genre3 + country1, data = train, kernel = 'linear')
+summary(Moviesvm)
+```
+
+#Cross-validation of Cost
+```{r}
+tune.out=tune(svm ,FavourableMovie~ year + duration + genre1 + genre2 + genre3 + country1,data=train ,kernel ="linear",k = 5, 
+              ranges =list(cost=c(0.001,0.01,0.1, 1.5, 10)))
+summary(tune.out)
+print(bestmod)
+bestmod =tune.out$best.model
+optimal_cost <- bestmod$cost
+```
+
+#svm model with optimal cost
+```{r}
+Moviesvm = svm(formula = FavourableMovie ~ year + duration + genre1 + genre2 + genre3 + country1, data = train, cost = optimal_cost, kernel = 'linear')
+summary(Moviesvm)
+```
+
+#prediction and error
+```{r}
+pred.svm <- predict(Moviesvm,test)
+pred <- ifelse(pred.svm >=0.64, "1", "0")
+mean(test$FavourableMovie!=pred)
+table(pred, test$FavourableMovie)
+```
+
+#ROC curve
+```{r}
+plot(roc(test$FavourableMovie, pred.svm, direction="<"),
+     col="yellow", lwd=3, main="ROC curve")
+```
