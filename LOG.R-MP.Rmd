@@ -1,0 +1,113 @@
+---
+title: "LOG.R-MP"
+author: "Whitney Chu"
+date: "01/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Import libraries
+```{r}
+library(forecast)
+library(tidyverse)    
+library(e1071)  
+library(RColorBrewer)
+library(dplyr)
+library(caTools)
+library(ggcorrplot)
+library(pROC)
+```
+
+#Read and Import Data
+```{r}
+movie.data <- read.csv("IMDb_movies.csv")
+movie.data
+```
+
+#Preview the Dataset
+```{r}
+set.seed(100)
+movie.data <- movie.data[sample(nrow(movie.data), 2500),]
+movie.data <- movie.data[,c(3:4,6:8,12,14)]
+movie.data
+head(movie.data)
+summary(movie.data)
+dim(movie.data)
+str(movie.data)
+```
+
+#check for missing data
+```{r}
+colSums(is.na(movie.data))
+```
+
+# Adding binary, dependent variable for logistic regression analysis
+```{r}
+movie.data$FavourableMovie <- ifelse(movie.data$avg_vote>=6.4,1,0)
+str(movie.data)
+View(movie.data)
+```
+
+#convert categorical variables
+```{r}
+movie.data$year <- as.numeric(as.factor(movie.data$year))
+movie.data$duration <- as.numeric(as.factor(movie.data$duration))
+movie.data$genre1 <- as.numeric(as.factor(movie.data$genre1))
+movie.data$genre2 <- as.numeric(as.factor(movie.data$genre2))
+movie.data$genre3 <- as.numeric(as.factor(movie.data$genre3))
+movie.data$country1 <- as.numeric(as.factor(movie.data$country1))
+movie.data
+```
+
+#Correlation matrix
+```{r}
+movie.rating <- (movie.data)
+corr <- cor(movie.rating)
+ggcorrplot(corr)
+corr <- as.table(corr)
+```
+
+#split into training and testing set 
+```{r}
+nrow(movie.data)
+rows <- c(1:nrow(movie.data))
+split <- sample(rows,size = (nrow(movie.data)*0.80))
+train <- as.data.frame(movie.data[split,])
+test <- as.data.frame(movie.data[-split,])
+nrow(train)
+head(train)
+str(train)
+nrow(test)
+head(test)
+```
+
+#Create Logistic Regression model 
+```{r}
+LOG.REG1 <- glm(formula = FavourableMovie ~ year + duration + genre1 + genre2 + genre3 + country1, data = train, family= "binomial")
+summary(LOG.REG1)
+```
+
+#validate the logistic regression model
+```{r}
+library(caret)
+train.control <- trainControl(method = "cv", number = 5)
+model <- train(FavourableMovie ~ ., data = train, method = "glm", trControl = train.control)
+print(model)
+```
+# Assessing the Testing error 
+```{r}
+predict.ret1 <- predict(LOG.REG1,test)
+pred <- ifelse(predict.ret1 >=0.64, "1", "0")
+mean(test$FavourableMovie!=pred)
+table(pred, test$FavourableMovie)
+```
+
+#ROC curve
+```{r}
+plot(roc(test$FavourableMovie, predict.ret1, direction="<"),
+     col="yellow", lwd=3, main="ROC curve")
+```
+

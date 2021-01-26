@@ -1,0 +1,108 @@
+---
+title: "LOG.R-NETO"
+author: "Whitney Chu"
+date: "01/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Import libraries
+```{r}
+library(caret)
+library(forecast)
+library(tidyverse)    
+library(e1071)  
+library(RColorBrewer)
+library(dplyr)
+library(caTools)
+library(pROC)
+```
+
+#Read and Import Data
+```{r}
+data <- read.csv("ALL_COUNTRIES.csv")
+data
+```
+
+#Preview the Dataset
+```{r}
+set.seed(100)
+data <- data[sample(nrow(data), 2500),]
+data <- data[,c(2, 4:7, 9:10)]
+data
+head(data)
+summary(data)
+dim(data)
+str(data)
+```
+
+#check for missing data
+```{r}
+colSums(is.na(data))
+```
+
+# Adding binary, dependent variable for logistic regression analysis
+```{r}
+data$FavourableMovie <- ifelse(data$imdb_rating>=0.64,1,0)
+str(data)
+View(data)
+```
+
+#convert categorical variables
+```{r}
+data$show_type <- as.numeric(as.factor(data$show_type))
+data$ori_country <- as.numeric(as.factor(data$ori_country))
+data$genre <- as.numeric(as.factor(data$genre))
+data$year <- as.numeric(as.factor(data$year))
+data$is_NF_Ori <- as.numeric(as.factor(data$is_NF_Ori))
+data$Continent <- as.numeric(as.factor(data$Continent))
+str(data)
+```
+
+
+#split into training and testing set 
+```{r}
+nrow(data)
+rows <- c(1:nrow(data))
+split <- sample(rows,size = (nrow(data)*0.80))
+train <- as.data.frame(data[split,])
+test <- as.data.frame(data[-split,])
+nrow(train)
+head(train)
+nrow(test)
+head(test)
+```
+
+#Create Logistic Regression model 
+```{r}
+LOG.REG1 <- glm(formula = FavourableMovie ~ show_type + ori_country + genre + year + is_NF_Ori + Continent, data = train, family= "binomial")
+summary(LOG.REG1)
+```
+
+
+#validate the linear regression model
+```{r}
+train.control <- trainControl(method = "cv", number = 5)
+model <- train(FavourableMovie ~ ., data = train, method = "glm", trControl = train.control)
+print(model)
+```
+
+# Assessing the Testing error 
+```{r}
+predict.ret1 <- predict(LOG.REG1,test)
+pred <- ifelse(predict.ret1 >=0.64, "1", "0")
+mean(test$FavourableMovie!=pred)
+table(pred, test$FavourableMovie)
+```
+
+#ROC curve
+```{r}
+plot(roc(test$FavourableMovie, predict.ret1, direction="<"),
+     col="yellow", lwd=3, main="ROC curve")
+```
+
+
+
