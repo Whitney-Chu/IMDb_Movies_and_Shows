@@ -1,0 +1,165 @@
+---
+title: "LR_GENRES"
+author: "Whitney Chu"
+date: "04/11/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Import libraries
+```{r}
+library(forecast)
+library(tidyverse)    
+library(e1071)  
+library(RColorBrewer)
+library(dplyr)
+library(caTools)
+```
+
+#Read and Import Data
+```{r}
+movie.data <- read.csv("IMDb_movies.csv")
+movie.data
+```
+
+#Preview the Dataset
+```{r}
+set.seed(100)
+movie.data <- movie.data[sample(nrow(movie.data), 2500),]
+movie.data <- movie.data[,c(6:8,14)]
+movie.data
+head(movie.data)
+summary(movie.data)
+dim(movie.data)
+str(movie.data)
+
+movie.data1 <- movie.data
+```
+
+#check for missing data
+```{r}
+colSums(is.na(movie.data))
+```
+
+#convert categorical variables
+```{r}
+movie.data$genre1 <- as.numeric(as.factor(movie.data$genre1))
+movie.data$genre2 <- as.numeric(as.factor(movie.data$genre2))
+movie.data$genre3 <- as.numeric(as.factor(movie.data$genre3))
+movie.data
+```
+
+#split into training and testing set 
+```{r}
+nrow(movie.data)
+rows <- c(1:nrow(movie.data))
+split <- sample(rows,size = (nrow(movie.data)*0.80))
+train1 <- as.data.frame(movie.data[split,])
+test1 <- as.data.frame(movie.data[-split,])
+nrow(train1)
+head(train1)
+str(train1)
+nrow(test1)
+head(test1)
+```
+
+#create Linerar Regression model 
+```{r}
+lr <- lm(avg_vote ~ ., data = train1)
+summary(lr)
+plot(lr$residuals, pch = 16, col = "blue") #Plot the results
+```
+
+#validate the linear regression model
+```{r}
+train.control <- trainControl(method = "cv", number = 5)
+model <- train(avg_vote ~ ., data = train1, method = "lm", trControl = train.control)
+print(model)
+```
+
+#predict on lr 
+```{r}
+pred <- predict(lr, data.frame(test1))
+
+pred <- round(pred, digits = 1)
+#error
+paste( "RMSE =",RMSE(test1$avg_vote, pred))
+
+#residuals
+Residuals <- test1$avg_vote - pred
+data.frame("Predicted" = pred, "Actual" = test1$avg_vote,"Residual" = Residuals )
+hist(Residuals, breaks = 25, xlab = "Residuals", main = "")
+```
+
+#Print first row
+```{r}
+newtest<- test1[1,1:3]
+newtest
+```
+
+#Iterate all the possibilites
+```{r}
+for (q in 1:as.numeric(max(movie.data$genre1))){
+  for (j in 1:as.numeric(max(movie.data$genre2))){
+    for (x in 1:as.numeric(max(movie.data$genre3))){
+      newtest[nrow(newtest) + 1,] = list(q,j,x)
+    }
+  }
+}
+```
+
+#predict and order results in descending order
+```{r}
+pred <- predict(lr, data.frame(newtest[,1:3]))
+pred<-as.data.frame(pred)
+a<-data.frame(newtest[,1:3],pred$pred)
+a
+qw<-a[order(a$pred.pred,decreasing = TRUE),][-1,]
+qw
+```
+
+#convert factors back to characters
+```{r}
+getStringGenres <- function(row) {
+  #make genres numeric
+  g1num <- as.numeric(row$genre1[1])
+  g2num <- as.numeric(row$genre2[1])
+  g3num <- as.numeric(row$genre3[1])
+  
+  #look in genre 1 in factored movie data table
+  #store the index number
+  #look back at genre 1 in original data table
+  #print out character genre for that index
+    index<-movie.data[which(movie.data[,"genre1"]==g1num),][1,0]
+  index<-toString(as.numeric(row.names((index))))
+  g1Label <- movie.data1[index,1]
+  
+  #look in genre 2 in factored movie data table
+  index<-movie.data[which(movie.data[,"genre2"]==g2num),][1,0]
+  index<-toString(as.numeric(row.names((index))))
+  g2Label <- movie.data1[index,2]
+  
+  #look in genre 3 in factored movie data table
+  index<-movie.data[which(movie.data[,"genre3"]==g3num),][1,0]
+  index<-toString(as.numeric(row.names((index))))
+  g3Label <- movie.data1[index,3]
+  
+  #returns three genres into a list
+  return <- list(g1Label,g2Label,g3Label)
+}
+```
+
+#Top 10 combinations of movie genres
+```{r}
+topLabels<- test1[1,1:3]
+
+for (i in 1:20){
+  labels<- getStringGenres(qw[i,])
+  topLabels[nrow(topLabels) + 1,] = labels
+}
+#top 10 
+topLabels[-1,]
+```

@@ -1,0 +1,116 @@
+---
+title: "LR_MOVIEPROJECT"
+author: "Whitney Chu"
+date: "04/11/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Import libraries
+```{r}
+library(forecast)
+library(tidyverse)    
+library(e1071)  
+library(RColorBrewer)
+library(dplyr)
+library(caTools)
+```
+
+#Read and Import Data
+```{r}
+movie.data <- read.csv("IMDb_movies.csv")
+movie.data
+```
+
+#Preview the Dataset
+```{r}
+set.seed(100)
+movie.data <- movie.data[sample(nrow(movie.data), 2500),]
+movie.data <- movie.data[,c(3:4,6:8,12,14)]
+movie.data
+head(movie.data)
+summary(movie.data)
+dim(movie.data)
+str(movie.data)
+```
+
+#check for missing data
+```{r}
+colSums(is.na(movie.data))
+```
+
+#convert categorical variables
+```{r}
+movie.data$year <- as.numeric(as.factor(movie.data$year))
+movie.data$duration <- as.numeric(as.factor(movie.data$duration))
+movie.data$genre1 <- as.numeric(as.factor(movie.data$genre1))
+movie.data$genre2 <- as.numeric(as.factor(movie.data$genre2))
+movie.data$genre3 <- as.numeric(as.factor(movie.data$genre3))
+movie.data$country1 <- as.numeric(as.factor(movie.data$country1))
+movie.data
+```
+
+#Correlation matrix
+```{r}
+movie.rating <- (movie.data)
+corr <- cor(movie.rating)
+ggcorrplot(corr)
+corr <- as.table(corr)
+```
+
+#split into training and testing set 
+```{r}
+nrow(movie.data)
+rows <- c(1:nrow(movie.data))
+split <- sample(rows,size = (nrow(movie.data)*0.80))
+train1 <- as.data.frame(movie.data[split,])
+train <- as.data.frame(scale(train1))
+test1 <- as.data.frame(movie.data[-split,])
+test <- as.data.frame(scale(test1))
+nrow(train)
+head(train)
+str(train)
+nrow(test)
+head(test)
+```
+
+#create Linear Regression model 
+```{r}
+lr <- lm(avg_vote ~ ., data = train)
+summary(lr)
+plot(lr$residuals, pch = 16, col = "blue") #Plot the results
+```
+
+#validate the linear regression model
+```{r}
+train.control <- trainControl(method = "cv", number = 5)
+model <- train(avg_vote ~ ., data = train, method = "lm", trControl = train.control)
+print(model)
+```
+
+#predict on lr 
+```{r}
+pred <- predict(lr, data.frame(test))
+
+#error
+paste( "RMSE =",RMSE(test$avg_vote, pred))
+
+#residuals
+Residuals <- test$avg_vote - pred
+data.frame("Predicted" = pred, "Actual" = test$avg_vote,"Residual" = Residuals )
+hist(Residuals, breaks = 25, xlab = "Residuals", main = "")
+
+pred<-as.data.frame(pred)
+
+unscaled2 <- (pred$pred) * sd(test1$avg_vote) + mean(test1$avg_vote)
+unscaled2 <- round(unscaled2, digits = 1)
+results2<- data.frame(actual = test1$avg_vote, prediction = unscaled2)
+results2
+paste( "RMSE =",RMSE(test1$avg_vote, unscaled2))
+```
+
+
+

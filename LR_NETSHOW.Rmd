@@ -1,0 +1,164 @@
+---
+title: "LR_NETO"
+author: "Whitney Chu"
+date: "22/11/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Import libraries
+```{r}
+library(datasets)
+library(neuralnet)
+library(caret)
+library(reshape2)
+library(ggplot2)
+library(stringr)
+library(nnet)
+library(e1071)
+library(DMwR)
+library(mltools)
+library(rmarkdown)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(ggcorrplot)
+```
+
+#Read and Import Data
+```{r}
+data <- read.csv("ALL_COUNTRIES.csv")
+data
+```
+
+#Preview the Dataset
+```{r}
+set.seed(100)
+data <- data[sample(nrow(data), 2500),]
+data <- data[,c(2,7,10)]
+data
+head(data)
+summary(data)
+dim(data)
+str(data)
+
+data1 <- data
+```
+
+#check for missing data
+```{r}
+colSums(is.na(data))
+```
+
+#convert categorical variables
+```{r}
+data$show_type <- as.numeric(as.factor(data$show_type))
+data$is_NF_Ori <- as.numeric(as.factor(data$is_NF_Ori))
+str(data)
+```
+
+#split into training and testing set 
+```{r}
+nrow(data)
+rows <- c(1:nrow(data))
+split <- sample(rows,size = (nrow(data)*0.80))
+train1 <- as.data.frame(data[split,])
+test1 <- as.data.frame(data[-split,])
+nrow(train1)
+head(train1)
+nrow(test1)
+head(test1)
+```
+
+#create linear regression model 
+```{r}
+lr <- lm(imdb_rating ~ ., data = train1)
+summary(lr)
+plot(lr$residuals, pch = 16, col = "blue") #Plot the results
+```
+
+#validate the linear regression model
+```{r}
+train.control <- trainControl(method = "cv", number = 5)
+model <- train(imdb_rating ~ ., data = train1, method = "lm", trControl = train.control)
+print(model)
+```
+
+#predict on lr 
+```{r}
+pred <- predict(lr, data.frame(test1))
+
+#error
+paste( "RMSE =",RMSE(test1$imdb_rating, pred))
+
+#residuals
+Residuals <- test1$imdb_rating - pred
+data.frame("Predicted" = pred, "Actual" = test1$imdb_rating,"Residual" = Residuals )
+hist(Residuals, breaks = 25, xlab = "Residuals", main = "")
+
+```
+
+#Print first row
+```{r}
+newtest<- test1[1,1:3]
+newtest
+```
+
+#Iterate all the possibilites
+```{r}
+for (q in 1:as.numeric(max(data$show_type))){
+  for (j in 1:as.numeric(max(data$is_NF_Ori))){
+      newtest[nrow(newtest) + 1,] = list(q,j)
+  }
+}
+```
+
+#predict and order results in descending order
+```{r}
+pred <- predict(lr, data.frame(newtest[,1:2]))
+pred<-as.data.frame(pred)
+a<-data.frame(newtest[,1:2],pred$pred)
+a
+qw <- a[order(a$pred.pred,decreasing = TRUE),][-1,]
+qw
+```
+
+#convert factors back to characters
+```{r}
+getStringGenres <- function(row) {
+  #make genres numeric
+  STnum <- as.numeric(row$show_type[1])
+  NOnum <- as.numeric(row$is_NF_Ori[1])
+
+  #look in show type in factored movie data table
+  #store the index number
+  #look back at genre 1 in original data table
+  #print out character genre for that index
+  index<-data[which(data[,"show_type"]==STnum),][1,0]
+  index<-toString(as.numeric(row.names((index))))
+  STLabel <- data1[index,1]
+  
+  #look in genre 2 in factored movie data table
+  index<-data[which(data[,"is_NF_Ori"]==NOnum),][1,0]
+  index<-toString(as.numeric(row.names((index))))
+  NOLabel <- data1[index,2]
+  
+  #returns three genres into a list
+  return <- list(STLabel,NOLabel)
+}
+```
+
+#Top 3 combinations of movie genres
+```{r}
+topLabels<- test1[1,1:2]
+
+for (i in 1:3){
+  labels<- getStringGenres(qw[i,])
+  topLabels[nrow(topLabels) + 1,] = labels
+}
+#top 3 
+topLabels[-1,]
+```
