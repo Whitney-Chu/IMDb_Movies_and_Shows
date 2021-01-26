@@ -1,0 +1,146 @@
+---
+title: "KNN_NETO"
+author: "Whitney Chu"
+date: "24/11/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#import data
+```{r}
+library(datasets)
+library(class)
+library(tidyr)
+library(tidyverse)    
+library(e1071)  
+library(RColorBrewer)
+library(dplyr)
+library(caTools)
+library(reshape2)
+library(ggplot2)
+library(stringr)
+library(DMwR)
+library(mltools)
+library(rmarkdown)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(ggcorrplot)
+```
+
+#Read and import data
+```{r}
+data <- read.csv("ALL_COUNTRIES.csv")
+data
+```
+
+#Preview the Dataset
+```{r}
+set.seed(100)
+data <- data[sample(nrow(data), 2500),]
+data <- data[,c(2, 4:7, 9:10)]
+data
+head(data)
+summary(data)
+dim(data)
+str(data)
+
+data1 <- data
+```
+
+#check for missing data
+```{r}
+colSums(is.na(data))
+```
+
+#convert categorical variables
+```{r}
+data$show_type <- as.numeric(as.factor(data$show_type))
+data$ori_country <- as.numeric(as.factor(data$ori_country))
+data$genre <- as.numeric(as.factor(data$genre))
+data$year <- as.numeric(as.factor(data$year))
+data$is_NF_Ori <- as.numeric(as.factor(data$is_NF_Ori))
+data$Continent <- as.numeric(as.factor(data$Continent))
+str(data)
+```
+
+#Correlation matrix
+```{r}
+rating <- (data)
+corr <- cor(rating)
+ggcorrplot(corr)
+corr <- as.table(corr)
+```
+
+#split into training and testing set 
+```{r}
+nrow(data)
+rows <- c(1:nrow(data))
+split <- sample(rows,size = (nrow(data)*0.80))
+train <- as.data.frame(data[split,])
+test <- as.data.frame(data[-split,])
+
+nrow(train)
+head(train)
+nrow(test)
+head(test)
+```
+
+#build the KNN network
+```{r}
+# Empty variables
+pred <- list()
+accuracy <- numeric()
+
+# From k=1 to k=100...
+for(k in 1:100){
+  
+  # KnnTestPrediction for each k
+  pred[[k]] <- knn(train[,1:6], test[,1:6], train$imdb_rating, k, prob=TRUE)
+  
+  # Accuracy for each k   
+  accuracy[k] <- sum(pred[[k]]==test$imdb_rating)/length(test$imdb_rating)*100
+  print(cat(as.character(k) , as.character(accuracy[k])))
+}
+
+#find optimal k
+index<-which(accuracy %in% max(accuracy))
+index<-index[1]
+index
+
+# Accuracy vs Choice of k
+?plot
+plot(accuracy, type="b", col="dodgerblue", 
+     xlab="k, number of neighbors", ylab="Classification accuracy", 
+     main="Accuracy vs Neighbors")
+
+# Add lines indicating k with best accuracy
+abline(v=which(accuracy==max(accuracy)), col="orange", lwd=1.5)
+
+# Add line for max accuracy seen
+?abline
+abline(h=max(accuracy), col="red", lty=2)
+# lty=2 for dashed
+
+# Add line for min accuracy seen 
+abline(h=min(accuracy), col="grey", lty=2)
+
+k <- knn(train = train[,1:6], test = test[,1:6], cl = train$imdb_rating, k=index)
+k <- as.data.frame(k)
+```
+
+#predict and get error
+```{r}
+test <- as.data.frame(test)
+
+#pred <- predict(k1, test[,7])
+pred<-as.numeric(as.numeric(as.character(sub("," , ".", unlist(k)))))
+
+results2<- data.frame(actual = test$imdb_rating, prediction = pred)
+results2
+paste("RMSE =",RMSE(test$imdb_rating, pred))
+```
+
