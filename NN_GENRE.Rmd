@@ -1,0 +1,197 @@
+---
+title: "NN_GENRE"
+author: "Whitney Chu"
+date: "04/11/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Import libraries
+```{r}
+library(datasets)
+library(neuralnet)
+library(caret)
+library(reshape2)
+library(ggplot2)
+library(stringr)
+library(nnet)
+library(e1071)
+library(DMwR)
+library(mltools)
+library(rmarkdown)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(ggcorrplot)
+```
+
+#Read and Import Data
+```{r}
+movie.data <- read.csv("IMDb_movies.csv")
+movie.data
+```
+
+#Preview the Dataset
+```{r}
+set.seed(100)
+movie.data <- movie.data[,c(6:8,14)]
+movie.data <- movie.data[sample(nrow(movie.data), 2500),]
+movie.data <- as.data.frame(movie.data)
+head(movie.data)
+summary(movie.data)
+dim(movie.data)
+str(movie.data)
+
+
+movie.data1 <- movie.data
+```
+
+#Check for missing data
+```{r}
+colSums(is.na(movie.data))
+```
+
+#Convert categorical variables
+```{r}
+movie.data$genre1 <- as.numeric(as.factor(movie.data$genre1))
+movie.data$genre2 <- as.numeric(as.factor(movie.data$genre2))
+movie.data$genre3 <- as.numeric(as.factor(movie.data$genre3))
+summary(movie.data)
+```
+
+#Correlation matrix
+```{r}
+movie.rating <- (movie.data)
+corr <- cor(movie.rating)
+ggcorrplot(corr)
+corr <- as.table(corr)
+```
+
+#Split data into training and testing set 
+```{r}
+nrow(movie.data)
+rows <- c(1:nrow(movie.data))
+split <- sample(rows,size = (nrow(movie.data)*0.80))
+train1 <- as.data.frame(movie.data[split,])
+test1 <- as.data.frame(movie.data[-split,])
+nrow(train1)
+head(train1)
+nrow(test1)
+head(test1)
+```
+
+#Create neural network model 
+```{r}
+nn <- neuralnet(avg_vote ~ genre1 + genre2 + genre3, data = train1, hidden = c(6), stepmax = 1e6)
+nn$result.matrix
+plot(nn)
+```
+
+#Validate the neural netowrk model
+```{r}
+train1
+folds <- createFolds(train1$avg_vote, k = 5)
+str(folds)
+results <- c()
+for (fld in folds){
+  index <- sample(1:nrow(train1),round(0.8*nrow(train1)))
+  data <- train1[-fld,]
+  nn <- neuralnet(avg_vote ~ ., data = train1, hidden = c(4))
+  pred.val1 <- compute(nn, train1[,1:3])
+  results <- cbind(results,RMSE(pred.val1$net.result, train1$avg_vote))
+}
+paste("After", length(results), "validation loops the root mean squared error of the network is", paste0(round(mean(results),2)))
+```
+
+
+#Predict on NN and Error
+```{r}
+#predict
+pred <- compute(nn, test1[,1:3])
+results.test <- data.frame(actual = test1$avg_vote, prediction = pred$net.result)
+results.test
+
+#error
+paste( "RMSE =", RMSE(pred$net.result, test1$avg_vote))
+
+#highest predicted rating
+paste("Highest predicted rating =", round(max(pred$net.result), digits = 1))
+```
+
+#Plot accuracy
+```{r}
+plot(results.test, col='blue', pch=16, main = "predicted vs actual for the testing set", ylab = "predicted", xlab = "actual")
+```
+#Print first row
+```{r}
+newtest<- test1[1,1:3]
+newtest
+```
+
+#Iterate all the possibilites
+```{r}
+for (q in 1:as.numeric(max(movie.data$genre1))){
+  for (j in 1:as.numeric(max(movie.data$genre2))){
+    for (x in 1:as.numeric(max(movie.data$genre3))){
+      newtest[nrow(newtest) + 1,] = list(q,j,x)
+    }
+  }
+}
+```
+
+#predict and order results in descending order
+```{r}
+pred <- compute(nn, newtest[,1:3])
+pred
+a<-data.frame(newtest[,1:3],pred$net.result)
+a
+qw<- a[order(a$pred.net.result,decreasing = TRUE),][-1,]
+qw
+```
+
+#convert factors back to characters
+```{r}
+getStringGenres <- function(row) {
+  #make genres numeric
+  g1num <- as.numeric(row$genre1[1])
+  g2num <- as.numeric(row$genre2[1])
+  g3num <- as.numeric(row$genre3[1])
+  
+  #look in genre 1 in factored movie data table
+  #store the index number
+  #look back at genre 1 in original data table
+  #print out character genre for that index
+  index<-movie.data[which(movie.data[,"genre1"]==g1num),][1,0]
+  index<-toString(as.numeric(row.names((index))))
+  g1Label <- movie.data1[index,1]
+  
+  #look in genre 2 in factored movie data table
+  index<-movie.data[which(movie.data[,"genre2"]==g2num),][1,0]
+  index<-toString(as.numeric(row.names((index))))
+  g2Label <- movie.data1[index,2]
+  
+  #look in genre 3 in factored movie data table
+  index<-movie.data[which(movie.data[,"genre3"]==g3num),][1,0]
+  index<-toString(as.numeric(row.names((index))))
+  g3Label <- movie.data1[index,3]
+  
+  #returns three genres into a list
+  return <- list(g1Label,g2Label,g3Label)
+}
+```
+
+#Top 10 combinations of movie genres
+```{r}
+topLabels<- test1[1,1:3]
+
+for (i in 1:20){
+  labels<- getStringGenres(qw[i,])
+  topLabels[nrow(topLabels) + 1,] = labels
+}
+#top 10 
+topLabels[-1,]
+```
+
