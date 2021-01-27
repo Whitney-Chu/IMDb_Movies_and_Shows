@@ -1,0 +1,112 @@
+## ----setup, include=FALSE-----------------------------------------------------------------------------------
+knitr::opts_chunk$set(echo = TRUE)
+
+
+## -----------------------------------------------------------------------------------------------------------
+library(datasets)
+library(neuralnet)
+library(caret)
+library(reshape2)
+library(ggplot2)
+library(stringr)
+library(nnet)
+library(e1071)
+library(DMwR)
+library(mltools)
+library(rmarkdown)
+library(rpart)
+library(rpart.plot)
+library(caret)
+library(ggcorrplot)
+
+
+## -----------------------------------------------------------------------------------------------------------
+movie.data <- read.csv("IMDb_movies.csv")
+movie.data
+
+
+## -----------------------------------------------------------------------------------------------------------
+set.seed(100)
+movie.data <- movie.data[sample(nrow(movie.data), 2500),]
+movie.data <- movie.data[,c(3:4,6:8,12,14)]
+movie.data
+head(movie.data)
+summary(movie.data)
+dim(movie.data)
+str(movie.data)
+
+
+## -----------------------------------------------------------------------------------------------------------
+colSums(is.na(movie.data))
+
+
+## -----------------------------------------------------------------------------------------------------------
+movie.data$year <- as.numeric(as.factor(movie.data$year))
+movie.data$duration <- as.numeric(as.factor(movie.data$duration))
+movie.data$genre1 <- as.numeric(as.factor(movie.data$genre1))
+movie.data$genre2 <- as.numeric(as.factor(movie.data$genre2))
+movie.data$genre3 <- as.numeric(as.factor(movie.data$genre3))
+movie.data$country1 <- as.numeric(as.factor(movie.data$country1))
+movie.data
+
+
+## -----------------------------------------------------------------------------------------------------------
+movie.rating <- (movie.data)
+corr <- cor(movie.rating)
+ggcorrplot(corr)
+corr <- as.table(corr)
+
+
+## -----------------------------------------------------------------------------------------------------------
+nrow(movie.data)
+rows <- c(1:nrow(movie.data))
+split <- sample(rows,size = (nrow(movie.data)*0.80))
+train1 <- as.data.frame(movie.data[split,])
+train <- as.data.frame(scale(train1))
+test1 <- as.data.frame(movie.data[-split,])
+test <- as.data.frame(scale(test1))
+nrow(train)
+head(train)
+nrow(test)
+head(test)
+
+
+## -----------------------------------------------------------------------------------------------------------
+nn <- neuralnet(avg_vote ~ ., data = train, hidden = c(4))
+nn$result.matrix
+plot(nn)
+
+
+## -----------------------------------------------------------------------------------------------------------
+folds <- createFolds(train$avg_vote, k = 5)
+str(folds)
+results <- c()
+for (fld in folds){
+  index <- sample(1:nrow(train),round(0.8*nrow(train)))
+  data <- train[-fld,]
+  nn <- neuralnet(avg_vote ~ ., data = train, hidden = c(2))
+  pred.val <- compute(nn, train[,1:6])
+  results <- cbind(results,RMSE(pred.val$net.result, train$avg_vote))
+}
+paste("After", length(results), "validation loops the root mean squared error of the network is", paste0(round(mean(results),2)))
+
+
+## -----------------------------------------------------------------------------------------------------------
+pred <- compute(nn, test[,1:6])
+results.test <- data.frame(actual = test$avg_vote, prediction = pred$net.result)
+results.test
+paste( "RMSE =", RMSE(pred$net.result, test$avg_vote))
+
+unscaled2 <- (pred$net.result) * sd(test1$avg_vote) + mean(test1$avg_vote)
+unscaled2 <- round(unscaled2, digits = 1)
+results2<- data.frame(actual = test1$avg_vote, prediction = unscaled2)
+results2
+paste( "RMSE =",RMSE(test1$avg_vote, unscaled2))
+
+
+## -----------------------------------------------------------------------------------------------------------
+#scaled
+plot(results.test, col='blue', pch=16, main = "predicted vs actual for the testing set", ylab = "predicted", xlab = "actual")
+#unscaled
+plot(results2, col='blue', pch=16, main = "predicted vs actual for the testing set", ylab = "predicted", xlab = "actual")
+
